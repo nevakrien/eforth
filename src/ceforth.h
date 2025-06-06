@@ -29,8 +29,98 @@ typedef pthread_cond_t  COND_VAR;
 
 using namespace std;
 
+#include <stdexcept>
+#include <cstddef>
+#include <iterator>
+
+template<typename T, size_t Capacity = 1024>
+class StaticVector {
+public:
+    using value_type = T;
+    using iterator = T*;
+    using const_iterator = const T*;
+
+private:
+    T data_[Capacity];
+    size_t len_ = 0;
+
+public:
+    void push_back(const T& value) {
+        if (len_ >= Capacity) throw std::runtime_error("StaticVector overflow");
+        data_[len_++] = value;
+    }
+
+    void pop_back() {
+        if (len_ == 0) throw std::runtime_error("StaticVector underflow");
+        --len_;
+    }
+
+    T& back() {
+        if (len_ == 0) throw std::runtime_error("StaticVector empty");
+        return data_[len_ - 1];
+    }
+
+    T& at(size_t i) {
+        if (i >= len_) throw std::out_of_range("StaticVector out of range");
+        return data_[i];
+    }
+
+    T& operator[](int i) {
+        if (i < 0) i += len_;
+#if CC_DEBUG
+        return at(i);
+#else
+        return data_[i];
+#endif
+    }
+
+    void clear() { len_ = 0; }
+    size_t size() const { return len_; }
+    size_t capacity() const { return Capacity; }
+    T* data() { return data_; }
+
+    iterator begin() { return data_; }
+    iterator end() { return data_ + len_; }
+    const_iterator begin() const { return data_; }
+    const_iterator end() const { return data_ + len_; }
+
+    void reserve(size_t n) {
+        if (n > Capacity) throw std::runtime_error("Cannot reserve beyond fixed capacity");
+    }
+
+    void insert(iterator pos, iterator first, iterator last) {
+        size_t offset = pos - begin();
+        size_t count = last - first;
+        if (len_ + count > Capacity) throw std::runtime_error("StaticVector insert overflow");
+
+        for (size_t i = len_; i > offset; --i)
+            data_[i + count - 1] = data_[i - 1];
+        for (size_t i = 0; i < count; ++i)
+            data_[offset + i] = first[i];
+        len_ += count;
+    }
+
+    void erase(iterator pos) {
+        if (pos < begin() || pos >= end()) throw std::out_of_range("Invalid erase");
+        size_t offset = pos - begin();
+        for (size_t i = offset; i + 1 < len_; ++i)
+            data_[i] = data_[i + 1];
+        --len_;
+    }
+
+    void erase(iterator first, iterator last) {
+        size_t count = last - first;
+        size_t offset = first - begin();
+        for (size_t i = offset; i + count < len_; ++i)
+            data_[i] = data_[i + count];
+        len_ -= count;
+    }
+};
+
+
+
 template<typename T>
-struct FV : public vector<T> {         ///< our super-vector class
+struct FV : public StaticVector<T> {         ///< our super-vector class
     FV *merge(FV<T> &v) {
         this->insert(this->end(), v.begin(), v.end()); v.clear(); return this;
     }
